@@ -472,8 +472,8 @@ triad={
 
 findop=(n,prims)=>Object.keys(prims).indexOf(n), as_enum=x=>x.split(',').reduce((x,y,i)=>{x[y]=i;return x},{})
 let tnames=0;tempname=_=>lms(`@t${tnames++}`)
-op=as_enum('JUMP,JUMPF,JUMPT,LIT,DUP,DROP,SWAP,OVER,BUND,OP1,OP2,OP3,GET,SET,LOC,AMEND,TAIL,CALL,BIND,ITER,EACH,NEXT,COL,IPRE,IPOST,FIDX,FMAP')
-oplens=   [ 3   ,3    ,3    ,3  ,1  ,1   ,1   ,1   ,3   ,3  ,3  ,3  ,3  ,3  ,3  ,3    ,1   ,1   ,1   ,1   ,3   ,3   ,1  ,3   ,3    ,3   ,3    ]
+op=as_enum('JUMP,JUMPF,JUMPT,LIT,DUP,DROP,SWAP,OVER,BUND,OP1,OP2,OP3,GET,SET,LOC,LOCS,AMEND,TAIL,CALL,BIND,ITER,EACH,NEXT,COL,IPRE,IPOST,FIDX,FMAP')
+oplens=   [ 3   ,3    ,3    ,3  ,1  ,1   ,1   ,1   ,3   ,3  ,3  ,3  ,3  ,3  ,3  ,3   ,3    ,1   ,1   ,1   ,1   ,3   ,3   ,1  ,3   ,3    ,3   ,3    ]
 blk_addb=(x,n  )=>x.b.push(0xFF&n)
 blk_here=(x    )=>x.b.length
 blk_setb=(x,i,n)=>x.b[i]=0xFF&n
@@ -490,11 +490,12 @@ blk_op3 =(x,n)=>blk_opa(x,op.OP3,findop(n,triad))
 blk_lit =(x,v)=>blk_imm(x,op.LIT,v)
 blk_set =(x,n)=>blk_imm(x,op.SET,n)
 blk_loc =(x,n)=>blk_imm(x,op.LOC,n)
+blk_locs=(x,n)=>blk_imm(x,op.LOCS,n)
 blk_get =(x,n)=>blk_imm(x,op.GET,n)
 blk_getimm=(x,i)=>x.locals[i]
 blk_cat=(x,y)=>{
 	let z=0,base=blk_here(x);while(z<blk_here(y)){
-		const b=blk_getb(y,z);if(b==op.LIT||b==op.GET||b==op.SET||b==op.LOC||b==op.AMEND){blk_imm(x,b,blk_getimm(y,blk_gets(y,z+1)))}
+		const b=blk_getb(y,z);if(b==op.LIT||b==op.GET||b==op.SET||b==op.LOC||b==op.LOCS||b==op.AMEND){blk_imm(x,b,blk_getimm(y,blk_gets(y,z+1)))}
 		else if(b==op.JUMP||b==op.JUMPF||b==op.JUMPT||b==op.EACH||b==op.NEXT||b==op.FIDX){blk_opa(x,b,blk_gets(y,z+1)+base)}
 		else{for(let i=0;i<oplens[b];i++)blk_addb(x,blk_getb(y,z+i))}z+=oplens[b]
 	}
@@ -676,6 +677,7 @@ parse=text=>{
 }
 
 env_local=(e,n,x)=>{e.v.set(ls(n),x)}
+env_locals=(e,x)=>{x.k.map((n,i)=>env_local(e,n,x.v[i]))}
 env_getr =(e,n  )=>{const k=ls(n);r=e.v.get(k);return r?r: e.p?env_getr(e.p,n): null}
 env_setr =(e,n,x)=>{const k=ls(n);r=e.v.get(k);return r?e.v.set(k,x): e.p?env_setr(e.p,n,x): null}
 env_get  =(e,n  )=>env_getr(e,n)||NIL
@@ -717,6 +719,7 @@ runop=_=>{
 		case op.GET  :{ret(env_get(getev(),blk_getimm(b,imm)));break}
 		case op.SET  :{const v=arg();env_set(getev(),blk_getimm(b,imm),v),ret(v);break}
 		case op.LOC  :{const v=arg();env_local(getev(),blk_getimm(b,imm),v),ret(v);break}
+		case op.LOCS :{env_locals(getev(),blk_getimm(b,imm));break}
 		case op.BUND :{const r=[];for(let z=0;z<imm;z++)r.push(arg());r.reverse(),ret(lml(r));break}
 		case op.OP1  :{                      ret(monadi[imm](arg()    ));break}
 		case op.OP2  :{const         y=arg();ret(dyadi [imm](arg(),y  ));break}
@@ -3216,12 +3219,12 @@ event_invoke=(target,name,arg,hunk,nodiscard)=>{
 		if(lin(t))sname='!default_handlers'
 		if(deck_is(t)){
 			t.modules.v.map((v,i)=>bind(b,t.modules.k[i],ifield(v,'value')))
-			t.cards  .v.map((v,i)=>bind(b,t.cards  .k[i],v                ))
+			blk_locs(b,t.cards)
 			sname='!deck_scope'
 		}
 		if(card_is(t)||prototype_is(t)||(contraption_is(t)&&target!=t)){
 			bind(b,lms('card'),t)
-			t.widgets.v.map((v,i)=>bind(b,t.widgets.k[i],v))
+			blk_locs(b,t.widgets)
 			sname='!card_scope'
 		}
 		blk_cat(b,scopes.v[z]),blk_op(b,op.DROP)

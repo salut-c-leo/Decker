@@ -911,8 +911,8 @@ primitive triads[]={
 
 int findop(char*n,primitive*p){if(n)for(int z=0;p[z].name[0];z++)if(!strcmp(n,p[z].name))return z;return -1;}
 int tnames=0;lv* tempname(void){char t[64];snprintf(t,sizeof(t),"@t%d",tnames++);return lmcstr(t);}
-enum opcodes {JUMP,JUMPF,JUMPT,LIT,DUP,DROP,SWAP,OVER,BUND,OP1,OP2,OP3,GET,SET,LOC,AMEND,TAIL,CALL,BIND,ITER,EACH,NEXT,COL,IPRE,IPOST,FIDX,FMAP};
-int oplens[]={3   ,3    ,3    ,3  ,1  ,1   ,1   ,1   ,3   ,3  ,3  ,3  ,3  ,3  ,3  ,3    ,1   ,1   ,1   ,1   ,3   ,3   ,1  ,3   ,3    ,3   ,3   };
+enum opcodes {JUMP,JUMPF,JUMPT,LIT,DUP,DROP,SWAP,OVER,BUND,OP1,OP2,OP3,GET,SET,LOC,LOCS,AMEND,TAIL,CALL,BIND,ITER,EACH,NEXT,COL,IPRE,IPOST,FIDX,FMAP};
+int oplens[]={3   ,3    ,3    ,3  ,1  ,1   ,1   ,1   ,3   ,3  ,3  ,3  ,3  ,3  ,3  ,3   ,3    ,1   ,1   ,1   ,1   ,3   ,3   ,1  ,3   ,3    ,3   ,3   };
 void blk_addb(lv*x,int n){
 	if(x->ns<x->n+1)x->sv=realloc(x->sv,(x->ns*=2)*sizeof(char));x->sv[x->n++]=n;
 	if(x->n>=65536||x->c>=65536)printf("TOO MUCH BYTECODE!\n"),exit(1);
@@ -932,11 +932,12 @@ void blk_imm (lv*x,int o,lv*k){int i=-1;EACH(z,x)if(matchr(x->lv[z],k))i=z;if(i=
 #define blk_lit(x,v)    blk_imm(x,LIT,v)
 #define blk_set(x,n)    blk_imm(x,SET,n)
 #define blk_loc(x,n)    blk_imm(x,LOC,n)
+#define blk_locs(x,n)   blk_imm(x,LOCS,n)
 #define blk_get(x,n)    blk_imm(x,GET,n)
 lv*  blk_getimm(lv*x,int i){return x->lv[i];}
 void blk_cat(lv*x,lv*y){
 	int z=0,base=blk_here(x);while(z<blk_here(y)){
-		int b=blk_getb(y,z);if(b==LIT||b==GET||b==SET||b==LOC||b==AMEND){blk_imm(x,b,blk_getimm(y,blk_gets(y,z+1)));}
+		int b=blk_getb(y,z);if(b==LIT||b==GET||b==SET||b==LOC||b==LOCS||b==AMEND){blk_imm(x,b,blk_getimm(y,blk_gets(y,z+1)));}
 		else if(b==JUMP||b==JUMPF||b==JUMPT||b==EACH||b==NEXT||b==FIDX){blk_opa(x,b,blk_gets(y,z+1)+base);}
 		else{for(int i=0;i<oplens[b];i++)blk_addb(x,blk_getb(y,z+i));}z+=oplens[b];
 	}
@@ -1192,6 +1193,7 @@ lv* parse(char*text){
 // Interpreter
 
 void env_local(lv*e,lv*n,lv*x){SFIND(z,e,n->sv){e->lv[z]=x;return;}ld_add(e,n,x);}
+void env_locals(lv*e,lv*x){EACH(z,x)env_local(e,x->kv[z],x->lv[z]);}
 lv* env_getr(lv*e,lv*n){SFIND(z,e,n->sv)return e->lv[z];return e->env?env_getr(e->env,n): NULL;}
 void env_setr(lv*e,lv*n,lv*x){SFIND(z,e,n->sv){e->lv[z]=x;return;}if(e->env)env_setr(e->env,n,x);}
 lv* env_get(lv*e,lv*n){lv*r=env_getr(e,n);return r?r:LNIL;}
@@ -1230,6 +1232,7 @@ void runop(void){
 		case GET:{ret(env_get(ev(),blk_getimm(b,imm)));break;}
 		case SET:{lv*v=arg();env_set(ev(),blk_getimm(b,imm),v);ret(v);break;}
 		case LOC:{lv*v=arg();env_local(ev(),blk_getimm(b,imm),v);ret(v);break;}
+		case LOCS:{env_locals(ev(),blk_getimm(b,imm));break;}
 		case BUND:{lv*r=lml(imm);EACHR(z,r)r->lv[z]=arg();ret(r);break;}
 		case OP1:{                      ret(((lv*(*)(lv*        ))monads[imm].func)(arg()    ));break;}
 		case OP2:{           lv*y=arg();ret(((lv*(*)(lv*,lv*    ))dyads [imm].func)(arg(),y  ));break;}
